@@ -29,6 +29,11 @@ LD_LIBRARY_PATH=$PWD/build/lib ./test_setihdr
 ```
 
 6. generate coverage report
+```bash
+gcov -o .libs pngset.c
+```
+
+7. Retest
 ```bash 
 find . -name "*.gcda" -delete && LD_LIBRARY_PATH=$PWD/build/lib ./test_setihdr
 ```
