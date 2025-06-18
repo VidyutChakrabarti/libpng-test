@@ -49,3 +49,7 @@ Interpret the Output:
 - Lines with #####: were not executed.
 - Lines with -: are not executable (comments, braces, etc.).
 
+Additionally: png_set_ihdr is presented pngset.c
+// check_ihdr is present in png.c
+Find the definitions and fields of different structs in pnginfo.c
+

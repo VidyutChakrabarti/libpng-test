@@ -2,59 +2,87 @@
 
 #include <setjmp.h>
 
+#include <stdlib.h>
+
 #include "png.h"
 
-// Custom error handler: print error and longjmp
+static jmp_buf error_handler_jmp_buf;
+
+// Error handler for libpng
 
 static void PNGCBAPI error_handler(png_structp png_ptr, png_const_charp error_msg)
 {
 
     fprintf(stderr, "libpng error: %s\n", error_msg);
 
-    longjmp(png_jmpbuf(png_ptr), 1);
+    longjmp(error_handler_jmp_buf, 1);
 }
+
+typedef struct
+{
+
+    png_uint_32 width, height;
+
+    int bit_depth, color_type, compression, filter, interlace;
+
+    const char *desc;
+
+} IHDRTest;
 
 int main(void)
 {
 
-    struct
-    {
+    IHDRTest testcases[] = {
 
-        png_uint_32 width, height;
+        {1, 1, 8, PNG_COLOR_TYPE_RGB, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE, "Valid RGB 8-bit"},
 
-        int bit_depth, color_type, compression, filter, interlace;
+        {0, 0, 8, PNG_COLOR_TYPE_RGB, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE, "Zero width/height (invalid)"},
 
-    } testcases[] = {
+        {100, 100, 16, PNG_COLOR_TYPE_RGBA, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_ADAM7, "Valid RGBA 16-bit interlaced"},
 
-        {1, 1, 8, PNG_COLOR_TYPE_RGB, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE},
+        {10, 10, 1, PNG_COLOR_TYPE_GRAY, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE, "Valid 1-bit grayscale"},
 
-        {0, 0, 8, PNG_COLOR_TYPE_RGB, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE}, // Invalid
+        {10, 10, 2, PNG_COLOR_TYPE_PALETTE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE, "Invalid bit depth for palette"},
 
-        {100, 100, 16, PNG_COLOR_TYPE_RGBA, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_ADAM7},
+        {10, 10, 4, PNG_COLOR_TYPE_GRAY_ALPHA, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE, "Invalid bit depth for gray+alpha"},
 
-        {10, 10, 1, PNG_COLOR_TYPE_GRAY, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE},
-
-        {10, 10, 2, PNG_COLOR_TYPE_PALETTE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE},
-
-        {10, 10, 4, PNG_COLOR_TYPE_GRAY_ALPHA, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE},
-
-        {10, 10, 8, PNG_COLOR_TYPE_RGB_ALPHA, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE},
-
-        // Add more edge and invalid cases as needed
+        {10, 10, 8, PNG_COLOR_TYPE_RGB_ALPHA, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE, PNG_INTERLACE_NONE, "Valid RGBA 8-bit"},
 
     };
 
-    for (size_t i = 0; i < sizeof(testcases) / sizeof(testcases[0]); ++i)
+    size_t num_tests = sizeof(testcases) / sizeof(testcases[0]);
+
+    for (size_t i = 0; i < num_tests; ++i)
     {
+
+        printf("Running test %zu: %s\n", i + 1, testcases[i].desc);
 
         png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, error_handler, NULL);
 
-        png_infop info_ptr = png_create_info_struct(png_ptr);
-
-        if (setjmp(png_jmpbuf(png_ptr)))
+        if (!png_ptr)
         {
 
-            // Error occurred, print and continue
+            fprintf(stderr, "Failed to create png_struct\n");
+
+            continue;
+        }
+
+        png_infop info_ptr = png_create_info_struct(png_ptr);
+
+        if (!info_ptr)
+        {
+
+            fprintf(stderr, "Failed to create info_ptr\n");
+
+            png_destroy_write_struct(&png_ptr, NULL);
+
+            continue;
+        }
+
+        if (setjmp(error_handler_jmp_buf))
+        {
+
+            fprintf(stderr, "Caught error in png_set_IHDR\n\n");
 
             png_destroy_write_struct(&png_ptr, &info_ptr);
 
@@ -84,7 +112,79 @@ int main(void)
         );
 
         png_destroy_write_struct(&png_ptr, &info_ptr);
+
+        printf("Test %zu completed successfully.\n\n", i + 1);
     }
+
+    // Edge case: png_ptr == NULL
+
+    {
+
+        fprintf(stderr, "Testing with png_ptr == NULL\n");
+
+        png_structp png_ptr = NULL;
+
+        png_infop info_ptr = NULL;
+
+        // This should do nothing and not crash
+
+        png_set_IHDR(
+
+            png_ptr,
+
+            info_ptr,
+
+            1, 1, 8,
+
+            PNG_COLOR_TYPE_RGB,
+
+            PNG_INTERLACE_NONE,
+
+            PNG_COMPRESSION_TYPE_BASE,
+
+            PNG_FILTER_TYPE_BASE
+
+        );
+
+        fprintf(stderr, "Test with png_ptr == NULL completed.\n\n");
+    }
+
+    // Edge case: info_ptr == NULL
+
+    {
+
+        fprintf(stderr, "Testing with info_ptr == NULL\n");
+
+        png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, error_handler, NULL);
+
+        png_infop info_ptr = NULL;
+
+        // safe: png_set_IHDR internally checks for NULL
+
+        png_set_IHDR(
+
+            png_ptr,
+
+            info_ptr,
+
+            1, 1, 8,
+
+            PNG_COLOR_TYPE_RGB,
+
+            PNG_INTERLACE_NONE,
+
+            PNG_COMPRESSION_TYPE_BASE,
+
+            PNG_FILTER_TYPE_BASE
+
+        );
+
+        png_destroy_write_struct(&png_ptr, NULL);
+
+        fprintf(stderr, "Test with info_ptr == NULL completed.\n\n");
+    }
+
+    printf("All tests executed safely.\n");
 
     return 0;
 }
