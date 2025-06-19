@@ -45,4 +45,8 @@ afl-cov -d out_corpus \
         -e "./fuzz_png_read AFL_FILE"
 ```
 
+6. To stop accumulating coverage over all runs: 
+```bash
+find . -name "*.gcda" -type f -delete
+```
 
