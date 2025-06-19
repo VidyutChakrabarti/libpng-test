@@ -11,8 +11,8 @@ find . -name "*.gcno" -o -name "*.gcda" | xargs rm -f
 ```bash
 CC=afl-gcc \
 CFLAGS="-fprofile-arcs -ftest-coverage -O0 -g" \
-./configure --prefix=$PWD/build-afl-cov-gcc
-
+LDFLAGS="-static" \
+./configure --prefix=$PWD/build-afl-cov-gcc --disable-shared --enable-static
 make -j$(nproc)
 make install
 ```
@@ -22,6 +22,7 @@ make install
 cd ~/Desktop/libpng/afltests
 
 afl-gcc -fprofile-arcs -ftest-coverage -O0 -g \
+  -static \
   -I../build-afl-cov-gcc/include \
   -L../build-afl-cov-gcc/lib \
   -o fuzz_png_read fuzz_png_read.c \
